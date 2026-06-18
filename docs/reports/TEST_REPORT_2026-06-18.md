@@ -7,9 +7,11 @@
 ## Zusammenfassung
 
 Die aktuelle MVP-Implementierung wurde lokal mit Unit-/API-/Skill-Tests, Ruff,
-Docker-Build und einem laufenden Docker-Compose-Healthcheck verifiziert. Der
-Builder-Workflow erzeugt einen abgeschlossenen State mit Artefakten,
-Deployment-Hinweisen und einem Quality Score oberhalb des Gates.
+Docker-Build und einem laufenden Docker-Compose-Healthcheck verifiziert. Die
+erweiterte Operator-UI liefert Agenten, Templates, Settings-Metadaten,
+Build-History und Deployment-Optionen aus. Der Builder-Workflow erzeugt einen
+abgeschlossenen State mit Artefakten, Deployment-Hinweisen und einem Quality
+Score oberhalb des Gates.
 
 ## Durchgefuehrte Tests
 
@@ -20,6 +22,10 @@ Deployment-Hinweisen und einem Quality Score oberhalb des Gates.
 | API Health Endpoint | passed | < 0.1 | `/health` liefert `status: ok` |
 | API Build Endpoint | passed | < 0.2 | `/build` liefert Artefakte und Score >= 75 |
 | API Empty Request Validation | passed | < 0.1 | Leere Requests liefern HTTP 422 |
+| Metadata Endpoint | passed | < 0.1 | Settings/API-Key-Status ohne Secret-Werte |
+| Agents Endpoint | passed | < 0.1 | 8 Agent Specs im Container sichtbar |
+| Templates Endpoint | passed | < 0.1 | 7 Templates im Container sichtbar |
+| Build History Endpoint | passed | < 0.1 | Build-History liefert letzte Runs |
 | Skill Contract | passed | < 0.2 | `langgraph_project_scaffolder.run` liefert erwarteten Contract |
 | Ruff Static Check | passed | < 1.0 | All checks passed |
 | Docker Image Build | passed | ~15.0 | Non-root App-Image gebaut |
@@ -28,11 +34,13 @@ Deployment-Hinweisen und einem Quality Score oberhalb des Gates.
 ## Sandbox Logs (wichtige Ausschnitte)
 
 ```text
-[INFO] pytest: 7 passed
+[INFO] pytest: 9 passed
 [INFO] ruff: All checks passed
 [INFO] docker compose build app: Built
 [INFO] healthcheck: {"status":"ok","app":"LangGraph Builder Team"}
 [INFO] empty request validation: HTTP 422
+[INFO] /agents: 8 specs
+[INFO] /templates: 7 templates
 ```
 
 ## Empfehlungen

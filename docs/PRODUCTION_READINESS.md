@@ -5,6 +5,8 @@
 Das Projekt ist als production-orientierter MVP startklar:
 
 - FastAPI-App mit `/health` und `POST /build`
+- Web-UI mit Build Studio, Agentenbereich, Memory/Archiv, Settings, Deployment
+  und prozesslokaler Build-History
 - LangGraph Workflow mit typisiertem `BuilderState`
 - Deterministische Agent-Nodes fuer reproduzierbare Tests ohne LLM-Key
 - Docker Compose Stack mit App, Postgres und Qdrant
@@ -25,6 +27,8 @@ Das Projekt ist als production-orientierter MVP startklar:
 - Dockerfile auf Non-root-Runtime und Healthcheck gehaertet.
 - Compose-Konfiguration fuer DB-Credentials parametrisiert.
 - CI Workflow und Makefile fuer reproduzierbare Checks ergaenzt.
+- Operator-UI und Metadaten-Endpunkte fuer Agent Specs, Templates, Settings und
+  Build-History ergaenzt.
 
 ## Empfohlene naechste Erweiterungen
 
@@ -36,9 +40,11 @@ Das Projekt ist als production-orientierter MVP startklar:
 4. Live-LLM-Adapter pro Agent mit strukturierter Output-Validierung ergaenzen.
 5. Authentifizierung fuer die API/UI einfuehren, bevor die App oeffentlich
    erreichbar betrieben wird.
-6. K3s-Manifeste um Namespace, Secrets, Ingress, Ressourcenlimits und externe
+6. Build-History und Artefaktarchiv von Prozessspeicher auf Postgres/Object
+   Storage umstellen.
+7. K3s-Manifeste um Namespace, Secrets, Ingress, Ressourcenlimits und externe
    Datenbanken erweitern.
-7. Observability ausbauen: strukturierte Logs, Request IDs, Metrics und optional
+8. Observability ausbauen: strukturierte Logs, Request IDs, Metrics und optional
    LangSmith Tracing.
 
 ## Deployment-Freigabe

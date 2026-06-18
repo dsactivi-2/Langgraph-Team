@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     project_memory_collection: str = "project_memory"
     global_memory_collection: str = "global_meta_knowledge"
     openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

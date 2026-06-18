@@ -7,6 +7,11 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY agents ./agents
+COPY docs ./docs
+COPY prompts ./prompts
+COPY skills ./skills
+COPY templates ./templates
 
 RUN pip install --no-cache-dir .
 
