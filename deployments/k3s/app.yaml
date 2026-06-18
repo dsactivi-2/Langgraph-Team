@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langgraph-builder-team
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: langgraph-builder-team
+  template:
+    metadata:
+      labels:
+        app: langgraph-builder-team
+    spec:
+      containers:
+        - name: app
+          image: langgraph-builder-team:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langgraph-builder-team
+spec:
+  selector:
+    app: langgraph-builder-team
+  ports:
+    - port: 80
+      targetPort: 8000
