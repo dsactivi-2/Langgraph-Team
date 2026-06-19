@@ -14,6 +14,18 @@ Adapter fuer LangChain, LangChain.js, LangGraph Server, LangGraph.js,
 Deep Agents, Deep Agents.js, MCP, Agent Protocol und Open-SWE-Handoffs
 enthalten.
 
+Die Produktgrenzen sind bewusst so gezogen, wie LangChain/LangGraph/LangSmith
+vorgesehen sind:
+
+- **LangChain** bleibt Library-Schicht fuer Runnables, Tools, Modelle und
+  Adapter.
+- **LangGraph** ist die Graph-/Runtime-Schicht und kann ueber `langgraph.json`
+  separat als LangGraph Server laufen.
+- **LangSmith** ist Observability/Evaluation und wird ueber offizielle
+  `LANGSMITH_*`/`LANGCHAIN_TRACING_V2` Settings angebunden.
+- **Builder Team** ist die Operator-App fuer UI, History, Memory, Projektplanung
+  und Deployment.
+
 ## Ziele & Erfolgskriterien
 
 - [x] Typisiertes State-Schema mit Pydantic
@@ -42,7 +54,7 @@ enthalten.
 | LangChain | Eingebaut | `src/langgraph_builder_team/langchain_adapter.py` |
 | LangChain.js | Eingebaut als Adapterpaket | `js-adapters/src/langchain.ts` |
 | LangGraph | Eingebaut | `src/langgraph_builder_team/graph.py` |
-| LangGraph Server | Eingebaut als Config | `langgraph.json` |
+| LangGraph Server | Eingebaut als separater Service | `langgraph.json`, `docker-compose.official.yml` |
 | LangGraph.js | Eingebaut als Adapterpaket | `js-adapters/src/langgraph.ts` |
 | Deep Agents | Eingebaut als Starter/Runtime Adapter | `/integrations/deep-agents/code` |
 | Deep Agents.js | Eingebaut als Adapterpaket | `js-adapters/src/deep-agents.ts` |
@@ -50,6 +62,23 @@ enthalten.
 | MCP Adapters | Eingebaut | `/mcp/tools`, `MCP_SERVERS_JSON` |
 | Agent Protocol | Eingebaut | `/agent-protocol/*` |
 | LangSmith | Konfigurierbar | `LANGSMITH_API_KEY`, `LANGCHAIN_TRACING_V2` |
+
+## Production Subdomains
+
+Das offizielle VPS-Overlay trennt die Oberflaechen:
+
+| Subdomain | Zweck |
+| --- | --- |
+| `builder.example.com` | Operator UI |
+| `api.example.com` | Builder API |
+| `graph.example.com` | LangGraph Server |
+| `smith.langchain.com` | LangSmith UI, extern |
+
+Start mit Subdomains:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.official.yml up -d --build
+```
 
 ## Architektur
 

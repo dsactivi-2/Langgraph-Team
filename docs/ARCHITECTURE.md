@@ -6,9 +6,19 @@ Das LangGraph Builder Team ist ein meta-agentisches System zum Planen, Bauen,
 Testen, Reviewen und Deployen von LangGraph-basierten Agents, Workflows, Skills
 und Projekten.
 
-Der aktuelle MVP nutzt einen deterministischen `StateGraph`, damit lokale Tests,
-Docker-Builds und VPS-Deployments ohne API-Key reproduzierbar funktionieren. Die
-LLM-Integration ist als naechster Ausbaupunkt pro Agent-Node vorgesehen.
+Die Architektur trennt die offiziellen Produkte bewusst nach ihrer vorgesehenen
+Rolle:
+
+- **LangChain**: Modell-, Tool- und Runnable-Schicht im Anwendungscode.
+- **LangGraph**: Agent-Orchestrierung, StateGraph, Checkpointing und optionaler
+  LangGraph Server ueber `langgraph.json`.
+- **LangSmith**: Tracing, Evaluation und Observability ueber offizielle
+  Environment-Variablen und LangSmith-Projekt.
+- **Builder Team App**: Operator-UI, Projektverwaltung, Chat-History,
+  Build-History und Integrations-API.
+
+Es werden keine LangChain-/LangGraph-/LangSmith-Produkte nachgebaut. Die App
+ergaenzt die Produktlinie als Projekt- und Operator-Oberflaeche.
 
 ## Agenten-Struktur
 
@@ -47,18 +57,34 @@ graph TD
     Reflection --> Planner
 ```
 
-## Runtime
+## Runtime-Schichten
 
-Das System nutzt `langgraph.graph.StateGraph` und typisierte Pydantic-Modelle als
-Vertrag zwischen den Nodes. Jeder Node nimmt einen `BuilderState` entgegen und
-gibt denselben State mit neuen Artefakten, Entscheidungen oder Ergebnissen
-zurueck.
+| Schicht | Offizielles Produkt | Umsetzung im Repo |
+| --- | --- | --- |
+| LLM/Tools/Runnables | LangChain | `langchain_adapter.py`, LLM Adapter, MCP Tool Adapter |
+| Agent Graph | LangGraph | `graph.py`, `StateGraph`, `PostgresSaver`, `langgraph.json` |
+| Agent Server | LangGraph Platform/Server | separater Compose-Service `langgraph-server` auf Port `2024` |
+| Tracing/Evals | LangSmith | `LANGSMITH_*` / `LANGCHAIN_TRACING_V2` |
+| Operator UI/API | Eigene App | FastAPI UI/API auf Port `8000` |
 
 ## Persistence
 
-Das Compose-Setup liefert Postgres und Qdrant mit. Der aktuelle MVP startet diese
-Services bereits produktionsnah; die konkrete LangGraph-Checkpointer- und
-Vector-Store-Anbindung ist der naechste Implementierungsschritt.
+Das Compose-Setup liefert Postgres und Qdrant mit. Postgres wird fuer
+Build-/Chat-History und den LangGraph Postgres Checkpointer genutzt. Qdrant wird
+fuer Projekt-Memory und semantische Suche genutzt.
+
+## Subdomain-Trennung
+
+Production-Deployment trennt die Oberflaechen ueber Subdomains:
+
+| Subdomain | Ziel | Oeffentlich? |
+| --- | --- | --- |
+| `builder.example.com` | Builder Team UI | Ja, mit Auth |
+| `api.example.com` | Builder Team FastAPI/API | Ja, mit Auth/API-Schutz |
+| `graph.example.com` | Offizieller LangGraph Server aus `langgraph.json` | Optional, nur wenn gebraucht |
+| `smith.langchain.com` | Offizielle LangSmith UI | Extern/SaaS |
+| `postgres` | Checkpointer + History DB | Nein, intern |
+| `qdrant` | Vector Memory | Nein, intern |
 
 ## API
 
@@ -72,13 +98,14 @@ Siehe [docs/adr](./adr).
 
 Die wichtigsten bisherigen Entscheidungen:
 
-- Deterministische Nodes vor echter LLM-Ausfuehrung, damit Tests und Deployment
-  stabil sind.
-- Docker Compose als Standardpfad fuer VPS-Deployment.
-- Postgres und Qdrant sind von Anfang an Teil der Infrastruktur, auch wenn die
-  tiefe Persistenz-Integration inkrementell folgt.
-- Hermes-Kompatibilitaet wird ueber Skill-Dateien und `hermes_profile.yaml`
-  Artefakte vorbereitet.
+- LangChain bleibt Code-/Tool-Schicht und wird nicht als eigener Service
+  behandelt.
+- LangGraph laeuft im Code als `StateGraph` und optional separat als
+  LangGraph Server.
+- LangSmith wird nicht selbst gehostet oder imitiert, sondern ueber offizielle
+  Tracing-Konfiguration angebunden.
+- Docker Compose bleibt der Standardpfad fuer VPS-Deployment.
+- Postgres und Qdrant sind Infrastruktur-Services und bleiben intern.
 
 ## Risiken & Mitigation
 

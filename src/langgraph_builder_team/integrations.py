@@ -30,6 +30,11 @@ def integration_matrix() -> dict[str, dict[str, Any]]:
             "runtime": "python",
             "adapter": "StateGraph + PostgresSaver",
             "langgraph_json": _exists("langgraph.json"),
+            "server": {
+                "implemented": _exists("langgraph.json"),
+                "mode": "official LangGraph CLI/Server config",
+                "public_url": settings.langgraph_public_url,
+            },
         },
         "langgraph_js": {
             "implemented": _exists("js-adapters/src/langgraph.ts"),
@@ -60,10 +65,21 @@ def integration_matrix() -> dict[str, dict[str, Any]]:
         },
         "langsmith": {
             "implemented": True,
-            "mode": "env-driven tracing + metadata",
+            "mode": "official env-driven tracing/evaluation target",
             "configured": bool(settings.langsmith_api_key),
             "project": settings.langsmith_project,
+            "endpoint": settings.langsmith_endpoint,
+            "public_url": settings.langsmith_public_url,
             "tracing_enabled": settings.langchain_tracing_v2,
+        },
+        "product_domains": {
+            "implemented": True,
+            "mode": "reverse-proxy separation",
+            "builder_ui": settings.builder_public_url,
+            "api": settings.api_public_url,
+            "langgraph_server": settings.langgraph_public_url,
+            "langsmith": settings.langsmith_public_url,
+            "internal_only": ["postgres", "qdrant"],
         },
         "langconnect": langconnect_status(),
     }

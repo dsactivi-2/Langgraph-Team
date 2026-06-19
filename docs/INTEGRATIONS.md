@@ -9,7 +9,7 @@ Integration.
 | --- | --- | --- |
 | LangChain | `src/langgraph_builder_team/langchain_adapter.py` | Builder als `RunnableLambda` und `StructuredTool` nutzen |
 | LangGraph | `src/langgraph_builder_team/graph.py` | Primaerer Python `StateGraph` Workflow |
-| LangGraph Server | `langgraph.json` | Lokaler Start per `langgraph dev`, sobald die LangGraph CLI installiert ist |
+| LangGraph Server | `langgraph.json`, `docker-compose.official.yml` | Separater offizieller LangGraph Server auf `graph.<domain>` |
 | MCP Adapters | `src/langgraph_builder_team/mcp_adapters.py`, `/mcp/tools` | Externe MCP Tools ueber `langchain-mcp-adapters` laden |
 | Agent Protocol | `/agent-protocol/info`, `/agent-protocol/threads`, `/agent-protocol/runs` | Thread-/Run-kompatible API-Flaeche fuer externe Agent Clients |
 | Deep Agents | `src/langgraph_builder_team/deep_agents_adapter.py` | Starter-Code fuer einen Deep Agent mit Builder Tool |
@@ -41,7 +41,22 @@ LangSmith wird env-gesteuert vorbereitet:
 LANGCHAIN_TRACING_V2=true
 LANGSMITH_API_KEY=...
 LANGSMITH_PROJECT="LangGraph Builder Team"
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 ```
+
+LangSmith wird nicht als lokaler Container gestartet. Die App sendet Traces und
+Evaluation-Daten an das offizielle LangSmith Projekt, sobald die Keys gesetzt
+sind.
+
+## Subdomain-Matrix
+
+| Subdomain | Produkt-/Service-Grenze |
+| --- | --- |
+| `builder.<domain>` | Builder Team UI |
+| `api.<domain>` | Builder Team API |
+| `graph.<domain>` | LangGraph Server aus `langgraph.json` |
+| `smith.langchain.com` | LangSmith SaaS/UI |
+| keine oeffentliche Subdomain | LangChain, Postgres, Qdrant |
 
 ## MCP Server Konfiguration
 

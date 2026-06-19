@@ -1,0 +1,15 @@
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$BUILDER_HOST} {
+	reverse_proxy app:8000
+}
+
+{$API_HOST} {
+	reverse_proxy app:8000
+}
+
+{$LANGGRAPH_HOST} {
+	reverse_proxy langgraph-server:2024
+}

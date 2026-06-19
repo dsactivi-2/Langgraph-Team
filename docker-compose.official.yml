@@ -1,0 +1,53 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+      langgraph-server:
+        condition: service_started
+    environment:
+      PUBLIC_BASE_DOMAIN: ${PUBLIC_BASE_DOMAIN:-example.com}
+      BUILDER_HOST: ${BUILDER_HOST:-builder.example.com}
+      API_HOST: ${API_HOST:-api.example.com}
+      LANGGRAPH_HOST: ${LANGGRAPH_HOST:-graph.example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployments/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+  langgraph-server:
+    build: .
+    env_file:
+      - .env
+    command:
+      [
+        "langgraph",
+        "dev",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "2024",
+        "--config",
+        "langgraph.json",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    expose:
+      - "2024"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
