@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "builder": "./src/langgraph_builder_team/graph.py:build_builder_graph"
+    "builder": "langgraph_builder_team.graph:build_builder_graph"
   },
   "env": ".env"
 }
