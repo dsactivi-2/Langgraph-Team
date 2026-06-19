@@ -77,6 +77,62 @@ def test_chat_endpoints_persist_or_fallback():
     assert history_response.json()["messages"]
 
 
+def test_agent_chat_agents_endpoint():
+    client = TestClient(app)
+
+    response = client.get("/agent-chat/agents")
+
+    assert response.status_code == 200
+    assert any(item["id"] == "orchestrator" for item in response.json()["agents"])
+
+
+def test_agent_chat_message_persists_user_and_assistant_messages():
+    client = TestClient(app)
+
+    response = client.post(
+        "/agent-chat/message",
+        json={
+            "project_id": "agent-chat-test",
+            "agent": "planner_architect",
+            "message": "Plane einen Agenten mit Memory und Review Gate.",
+            "use_llm": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["agent"] == "planner_architect"
+    assert body["llm_used"] is False
+    assert body["assistant_message"]["role"] == "assistant"
+    assert "planner_architect" in body["assistant_message"]["content"]
+
+    history_response = client.get("/chat/agent-chat-test")
+    assert history_response.status_code == 200
+    roles = [item["role"] for item in history_response.json()["messages"]]
+    assert "user" in roles
+    assert "assistant" in roles
+
+
+def test_agent_chat_can_trigger_build():
+    client = TestClient(app)
+
+    response = client.post(
+        "/agent-chat/message",
+        json={
+            "project_id": "agent-chat-build-test",
+            "agent": "orchestrator",
+            "message": "Build a small LangGraph project from chat.",
+            "use_llm": False,
+            "run_build": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["build"]["project_id"] == "agent-chat-build-test"
+    assert body["build"]["quality_score"] >= 75
+
+
 def test_memory_upsert_and_search():
     client = TestClient(app)
 

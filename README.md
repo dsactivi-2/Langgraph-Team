@@ -6,9 +6,9 @@
 
 Dieses Repository enthaelt ein production-orientiertes MVP fuer ein LangGraph Builder Team. Der Workflow plant ein Projekt, erzeugt erste Code-Artefakte, beschreibt Memory und Skills, fuehrt deterministische Sandbox-Checks aus, reviewed das Ergebnis, vergibt einen Quality Score und erzeugt Deployment-Hinweise.
 
-Die Web-UI stellt ein Build Studio mit Bereichen fuer Agenten, Memory/Archiv,
-Settings/API-Key-Status, Deployment-Checkliste und Build-History bereit. Builds
-und Chat-History werden in Postgres persistiert, Qdrant liefert Memory-Suche,
+Die Web-UI stellt einen Agent Chat, ein Build Studio und Bereiche fuer Agenten,
+Memory/Archiv, Settings/API-Key-Status, Deployment-Checkliste und Build-History
+bereit. Builds und Chat-History werden in Postgres persistiert, Qdrant liefert Memory-Suche,
 und ein OpenAI-kompatibler LLM-Adapter ist vorbereitet. Zusaetzlich sind
 Adapter fuer LangChain, LangChain.js, LangGraph Server, LangGraph.js,
 Deep Agents, Deep Agents.js, MCP, Agent Protocol und Open-SWE-Handoffs
@@ -19,6 +19,7 @@ enthalten.
 - [x] Typisiertes State-Schema mit Pydantic
 - [x] LangGraph Workflow mit Planner, Builder, Memory Designer, Executor, Reviewer, Verifier und Deployment Specialist
 - [x] FastAPI UI/API
+- [x] Agent Chat UI mit Agent-Auswahl, LLM-Fallback, History und optionalem Build-Trigger
 - [x] Operator-UI fuer Build-Planung, Agenten, Memory, Settings, History und Deployment
 - [x] Persistente Build-/Chat-History ueber Postgres mit Fallback
 - [x] Qdrant Memory Search mit lokalem Fallback fuer Tests

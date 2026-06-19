@@ -107,6 +107,23 @@ class ChatMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=20_000)
 
 
+class AgentChatRequest(BaseModel):
+    project_id: str = Field(..., min_length=1, max_length=120)
+    message: str = Field(..., min_length=1, max_length=20_000)
+    agent: Literal[
+        "orchestrator",
+        "planner_architect",
+        "agent_builder",
+        "memory_skills_designer",
+        "executor_sandbox_tester",
+        "reviewer_critic",
+        "verifier_evaluator",
+        "git_docs_deployment_specialist",
+    ] = "orchestrator"
+    use_llm: bool = True
+    run_build: bool = False
+
+
 class MemoryUpsertRequest(BaseModel):
     project_id: str = Field(..., min_length=1, max_length=120)
     text: str = Field(..., min_length=1, max_length=20_000)

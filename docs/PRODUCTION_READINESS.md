@@ -5,13 +5,15 @@
 Das Projekt ist als production-orientierter MVP startklar:
 
 - FastAPI-App mit `/health` und `POST /build`
-- Web-UI mit Build Studio, Agentenbereich, Memory/Archiv, Settings, Deployment,
-  LLM-Test und Build-History
+- Web-UI mit Agent Chat, Build Studio, Agentenbereich, Memory/Archiv, Settings,
+  Deployment, LLM-Test und Build-History
 - LangGraph Workflow mit typisiertem `BuilderState`
 - LangGraph PostgresSaver als Checkpointer, wenn Postgres erreichbar ist
 - Persistente Build- und Chat-History in Postgres mit kontrolliertem Fallback
 - Qdrant Memory Search mit deterministischem lokalem Embedding und Fallback
 - OpenAI-kompatibler LLM-Adapter
+- Agent Chat UI mit Agent-Auswahl, persistierter History, Qdrant Memory und
+  optionalem Build-Trigger
 - LangChain Runnable/Tool Adapter
 - LangGraph Server Config (`langgraph.json`)
 - Agent-Protocol-Endpunkte fuer Threads und Runs

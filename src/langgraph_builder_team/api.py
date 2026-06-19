@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from .agent_chat import AGENT_PERSONAS, create_agent_chat_reply
 from .auth import clear_auth_cookie, require_auth, set_auth_cookie, verify_session
 from .deep_agents_adapter import deep_agents_code, deep_agents_js_code, open_swe_task_payload
 from .graph import run_build
@@ -15,6 +16,7 @@ from .langconnect_adapter import LangConnectUnavailable, query_langconnect
 from .llm import LLMUnavailable, OpenAICompatibleLLM
 from .mcp_adapters import list_mcp_tools
 from .models import (
+    AgentChatRequest,
     AgentProtocolRunCreate,
     AgentProtocolThreadCreate,
     BuildRequest,
@@ -221,6 +223,18 @@ def add_chat_message(payload: ChatMessageRequest, request: Request) -> dict[str,
         {"kind": "chat", "role": payload.role},
     )
     return {"message": message, "storage_error": ARCHIVE.last_error}
+
+
+@app.post("/agent-chat/message")
+def agent_chat_message(payload: AgentChatRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    return create_agent_chat_reply(payload, ARCHIVE, MEMORY, LLM, _build_response)
+
+
+@app.get("/agent-chat/agents")
+def agent_chat_agents(request: Request) -> dict[str, object]:
+    require_auth(request)
+    return {"agents": [{"id": key, "description": value} for key, value in AGENT_PERSONAS.items()]}
 
 
 @app.post("/memory/upsert")
@@ -514,11 +528,84 @@ def index() -> str:
             font-size: 13px;
           }
           .settings-table th { color: var(--muted); font-weight: 700; }
+          .chat-shell {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 18px;
+            min-height: 680px;
+          }
+          .chat-window {
+            display: grid;
+            grid-template-rows: auto minmax(320px, 1fr) auto;
+            gap: 14px;
+            min-height: 680px;
+          }
+          .chat-toolbar {
+            display: grid;
+            grid-template-columns: minmax(180px, .9fr) minmax(180px, .9fr) auto auto;
+            gap: 10px;
+            align-items: end;
+          }
+          .toggle-row {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            min-height: 42px;
+            color: var(--muted);
+            font-size: 13px;
+          }
+          .toggle-row input { width: auto; }
+          .messages {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 16px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+          }
+          .message {
+            max-width: 82%;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px 13px;
+            background: #fff;
+            white-space: pre-wrap;
+            line-height: 1.5;
+          }
+          .message.user {
+            align-self: flex-end;
+            background: #e8f3f1;
+            border-color: #b7d8d2;
+          }
+          .message.assistant { align-self: flex-start; }
+          .message.system {
+            align-self: center;
+            max-width: 100%;
+            background: #fff7ed;
+            border-color: #fed7aa;
+            color: #7c2d12;
+          }
+          .message-meta {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            margin-bottom: 6px;
+          }
+          .chat-composer {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: end;
+          }
+          .chat-composer textarea { min-height: 104px; }
           .hidden { display: none; }
           @media (max-width: 980px) {
             .shell { grid-template-columns: 1fr; }
             aside { position: static; height: auto; }
-            .cols, .cards, .row { grid-template-columns: 1fr; }
+            .cols, .cards, .row, .chat-shell, .chat-toolbar, .chat-composer { grid-template-columns: 1fr; }
+            .message { max-width: 100%; }
             main { padding: 18px; }
             .topbar { align-items: flex-start; flex-direction: column; }
           }
@@ -530,7 +617,8 @@ def index() -> str:
             <div class="brand">LangGraph Builder Team</div>
             <div class="sub">Planen, bauen, testen, reviewen und deployen von Agent-Projekten.</div>
             <div class="nav">
-              <button class="active" data-tab="builder">Build Studio</button>
+              <button class="active" data-tab="agent-chat">Agent Chat</button>
+              <button data-tab="builder">Build Studio</button>
               <button data-tab="agents">Agenten</button>
               <button data-tab="memory">Memory & Archiv</button>
               <button data-tab="integrations">Integrationen</button>
@@ -549,7 +637,47 @@ def index() -> str:
               <div class="status"><span id="health-dot" class="dot"></span><span id="health-text">checking</span></div>
             </div>
 
-            <section id="builder" class="screen active">
+            <section id="agent-chat" class="screen active">
+              <div class="chat-shell">
+                <div class="panel chat-window">
+                  <div>
+                    <h2>Agent Chat</h2>
+                    <div class="help">Direkt mit dem Builder Team sprechen. Nachrichten werden gespeichert, in Qdrant indexiert und koennen optional einen Build ausloesen.</div>
+                  </div>
+                  <div id="agent-chat-messages" class="messages">
+                    <div class="message system">Waehle Projekt und Agent, dann schreibe deine Nachricht.</div>
+                  </div>
+                  <div class="chat-composer">
+                    <textarea id="agent-chat-input" placeholder="Schreibe z.B.: Plane einen Sales-Agenten mit CRM-Memory und Slack-Integration."></textarea>
+                    <button id="agent-chat-send" class="btn">Senden</button>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h2>Chat Optionen</h2>
+                  <div class="field">
+                    <label for="agent-chat-project">Project ID</label>
+                    <input id="agent-chat-project" value="langgraph-builder-production" />
+                  </div>
+                  <div class="field">
+                    <label for="agent-chat-agent">Agent</label>
+                    <select id="agent-chat-agent"></select>
+                  </div>
+                  <label class="toggle-row"><input id="agent-chat-use-llm" type="checkbox" checked /> LLM nutzen, wenn Key gesetzt ist</label>
+                  <label class="toggle-row"><input id="agent-chat-run-build" type="checkbox" /> Nachricht als Build ausfuehren</label>
+                  <div class="actions" style="margin-top: 12px">
+                    <button id="agent-chat-load" class="btn ghost">History laden</button>
+                    <button id="agent-chat-example" class="btn ghost">Beispiel</button>
+                  </div>
+                  <div style="height: 16px"></div>
+                  <h2>Status</h2>
+                  <div id="agent-chat-status" class="list">
+                    <div class="item">Bereit.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section id="builder" class="screen">
               <div class="grid cards">
                 <div class="panel metric"><div class="label">Quality Gate</div><div id="metric-score" class="value">-</div></div>
                 <div class="panel metric"><div class="label">Status</div><div id="metric-status" class="value">-</div></div>
@@ -851,6 +979,82 @@ curl http://localhost:8000/health</pre>
             `).join('');
           }
 
+          function agentChatProjectId() {
+            return byId('agent-chat-project').value.trim()
+              || byId('project-id').value.trim()
+              || (state.latest && state.latest.project_id)
+              || 'default';
+          }
+
+          function renderAgentChatMessages(messages) {
+            byId('agent-chat-messages').innerHTML = messages.length ? messages.map((item) => {
+              const role = ['user', 'assistant', 'system'].includes(item.role) ? item.role : 'system';
+              return `
+                <div class="message ${role}">
+                  <span class="message-meta">${escapeHtml(role)} · ${escapeHtml(item.created_at || '')}</span>
+                  ${escapeHtml(item.content)}
+                </div>
+              `;
+            }).join('') : '<div class="message system">Noch keine Nachrichten fuer dieses Projekt.</div>';
+            byId('agent-chat-messages').scrollTop = byId('agent-chat-messages').scrollHeight;
+          }
+
+          function setAgentChatStatus(items) {
+            byId('agent-chat-status').innerHTML = items.map((item) => `<div class="item">${escapeHtml(item)}</div>`).join('');
+          }
+
+          async function loadAgentChatAgents() {
+            const data = await getJson('/agent-chat/agents');
+            byId('agent-chat-agent').innerHTML = data.agents.map((agent) => (
+              `<option value="${escapeHtml(agent.id)}">${escapeHtml(agent.id)} - ${escapeHtml(agent.description)}</option>`
+            )).join('');
+          }
+
+          async function loadAgentChatHistory() {
+            const data = await getJson(`/chat/${encodeURIComponent(agentChatProjectId())}`);
+            renderAgentChatMessages(data.messages);
+            setAgentChatStatus([`History geladen: ${data.messages.length} Nachrichten`]);
+          }
+
+          async function sendAgentChatMessage() {
+            const input = byId('agent-chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+            const button = byId('agent-chat-send');
+            button.disabled = true;
+            setAgentChatStatus(['Agent arbeitet...']);
+            try {
+              const response = await getJson('/agent-chat/message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  project_id: agentChatProjectId(),
+                  message,
+                  agent: byId('agent-chat-agent').value,
+                  use_llm: byId('agent-chat-use-llm').checked,
+                  run_build: byId('agent-chat-run-build').checked
+                })
+              });
+              input.value = '';
+              await loadAgentChatHistory();
+              const status = [
+                `Agent: ${response.agent}`,
+                response.llm_used ? 'LLM Antwort genutzt' : 'Deterministische Fallback-Antwort genutzt',
+                `Memory Treffer: ${response.memory_results.length}`
+              ];
+              if (response.build) status.push(`Build Score: ${response.build.quality_score}/100`);
+              setAgentChatStatus(status);
+              if (response.build) {
+                renderBuild(response.build);
+                await refreshHistory();
+              }
+            } catch (error) {
+              setAgentChatStatus([error.message]);
+            } finally {
+              button.disabled = false;
+            }
+          }
+
           function renderBuild(result) {
             state.latest = result;
             byId('metric-score').textContent = `${result.quality_score}/100`;
@@ -910,6 +1114,7 @@ curl http://localhost:8000/health</pre>
 
           function currentProjectId() {
             return byId('chat-project').value.trim()
+              || byId('agent-chat-project').value.trim()
               || byId('project-id').value.trim()
               || (state.latest && state.latest.project_id)
               || 'default';
@@ -973,14 +1178,27 @@ curl http://localhost:8000/health</pre>
             state.metadata = await getJson('/metadata');
             renderSettings(state.metadata);
             renderIntegrations(state.metadata.integrations);
+            await loadAgentChatAgents();
             const agents = await getJson('/agents');
             renderMarkdownList('agent-list', agents.agents);
             const templates = await getJson('/templates');
             renderMarkdownList('template-list', templates.templates);
             await refreshHistory();
+            await loadAgentChatHistory();
           }
 
           byId('run-build').addEventListener('click', runBuild);
+          byId('agent-chat-send').addEventListener('click', sendAgentChatMessage);
+          byId('agent-chat-load').addEventListener('click', loadAgentChatHistory);
+          byId('agent-chat-example').addEventListener('click', () => {
+            byId('agent-chat-input').value = 'Plane als naechsten Schritt einen production-ready Support-Agenten mit Qdrant Memory, MCP Tools, Review Gate und VPS Deployment.';
+          });
+          byId('agent-chat-input').addEventListener('keydown', (event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+              event.preventDefault();
+              sendAgentChatMessage();
+            }
+          });
           byId('save-chat').addEventListener('click', saveChat);
           byId('load-chat').addEventListener('click', loadChat);
           byId('search-memory').addEventListener('click', searchMemory);
