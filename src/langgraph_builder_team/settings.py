@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     llm_provider: str = "openai-compatible"
     llm_base_url: str | None = None
     llm_model: str = "gpt-4o-mini"
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "LangGraph Builder Team"
+    langchain_tracing_v2: bool = False
+    mcp_servers_json: str | None = None
+    agent_protocol_enabled: bool = True
+    langconnect_url: str | None = None
+    open_swe_url: str | None = None
     auth_enabled: bool = False
     auth_username: str = "admin"
     auth_password: str | None = None

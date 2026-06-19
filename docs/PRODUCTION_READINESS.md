@@ -12,6 +12,13 @@ Das Projekt ist als production-orientierter MVP startklar:
 - Persistente Build- und Chat-History in Postgres mit kontrolliertem Fallback
 - Qdrant Memory Search mit deterministischem lokalem Embedding und Fallback
 - OpenAI-kompatibler LLM-Adapter
+- LangChain Runnable/Tool Adapter
+- LangGraph Server Config (`langgraph.json`)
+- Agent-Protocol-Endpunkte fuer Threads und Runs
+- MCP Adapter auf Basis von `langchain-mcp-adapters`
+- Deep Agents Python/JS Starter-Code und Adapter
+- Open SWE Task-Handoff Adapter
+- LangChain.js/LangGraph.js Adapterpaket unter `js-adapters/`
 - Deterministische Agent-Nodes fuer reproduzierbare Tests ohne LLM-Key
 - Docker Compose Stack mit App, Postgres und Qdrant
 - Non-root App-Container, App-Healthcheck und `no-new-privileges`
@@ -35,6 +42,8 @@ Das Projekt ist als production-orientierter MVP startklar:
   Build-History ergaenzt.
 - Postgres-Archiv, Chat-History, Qdrant Memory Search, Auth-Endpunkte und
   OpenAI-kompatibler LLM-Adapter ergaenzt.
+- LangChain, LangChain.js, LangGraph.js, Deep Agents, MCP, Agent Protocol und
+  Open-SWE-Handoff als konkrete Adapter-/API-Schicht ergaenzt.
 
 ## Empfohlene naechste Erweiterungen
 
@@ -46,6 +55,8 @@ Das Projekt ist als production-orientierter MVP startklar:
    Datenbanken erweitern.
 5. Observability ausbauen: strukturierte Logs, Request IDs, Metrics und optional
    LangSmith Tracing.
+6. LangConnect oder PGVector nur dann ergaenzen, wenn Qdrant als RAG-Backend
+   fachlich nicht ausreicht.
 
 ## Deployment-Freigabe
 

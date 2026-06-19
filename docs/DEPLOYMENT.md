@@ -37,6 +37,13 @@ Die lokale UI/API laeuft standardmaessig auf Port `8000`.
 | `GLOBAL_MEMORY_COLLECTION` | Qdrant Collection fuer globales Wissen | Nein | `global_meta_knowledge` |
 | `OPENAI_API_KEY` | OpenAI API Key fuer spaetere LLM-Adapter | Optional | `sk-...` |
 | `ANTHROPIC_API_KEY` | Claude API Key fuer spaetere LLM-Adapter | Optional | `sk-ant-...` |
+| `LANGSMITH_API_KEY` | LangSmith API Key fuer Tracing/Evaluation | Optional | `lsv2_...` |
+| `LANGSMITH_PROJECT` | LangSmith Projektname | Nein | `LangGraph Builder Team` |
+| `LANGCHAIN_TRACING_V2` | LangChain/LangSmith Tracing aktivieren | Nein | `true` |
+| `MCP_SERVERS_JSON` | JSON-Konfiguration fuer MCP Server | Optional | `{"github":{"transport":"stdio","command":"..."}}` |
+| `AGENT_PROTOCOL_ENABLED` | Agent-Protocol-Endpunkte aktivieren | Nein | `true` |
+| `LANGCONNECT_URL` | Externes LangConnect/RAG Backend | Optional | `https://...` |
+| `OPEN_SWE_URL` | Externe Open-SWE Instanz fuer Handoffs | Optional | `https://...` |
 | `POSTGRES_CHECKPOINTER_ENABLED` | LangGraph PostgresSaver aktivieren | Nein | `true` |
 | `LLM_PROVIDER` | LLM Adapter Typ | Nein | `openai-compatible` |
 | `LLM_BASE_URL` | OpenAI-kompatible Base URL | Optional | `https://api.openai.com/v1` |
@@ -108,6 +115,11 @@ builder.example.com {
 - Memory Search: `/memory/search`
 - Chat History: `/chat/{project_id}`
 - LLM Test: `/llm/complete`
+- Integration Matrix: `/integrations`
+- Agent Protocol: `/agent-protocol/info`, `/agent-protocol/threads`, `/agent-protocol/runs`
+- MCP Tools: `/mcp/tools`
+- Open SWE Handoff: `/integrations/open-swe/task`
+- LangConnect Query: `/integrations/langconnect/query`
 - Lokale Logs: `docker compose logs -f`
 - App Logs: `docker compose logs -f app`
 - Postgres Status: `docker compose ps postgres`

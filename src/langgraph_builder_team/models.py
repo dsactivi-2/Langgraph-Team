@@ -129,6 +129,34 @@ class LLMCompletionRequest(BaseModel):
     system: str | None = Field(default=None, max_length=5_000)
 
 
+class AgentProtocolThreadCreate(BaseModel):
+    thread_id: str | None = Field(default=None, min_length=1, max_length=120)
+    project_id: str | None = Field(default=None, min_length=1, max_length=120)
+    messages: list[ChatMessageRequest] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentProtocolRunCreate(BaseModel):
+    thread_id: str = Field(..., min_length=1, max_length=120)
+    input: str = Field(..., min_length=1, max_length=20_000)
+    project_id: str | None = Field(default=None, min_length=1, max_length=120)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OpenSWETaskRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=1, max_length=20_000)
+    repository: str | None = Field(default=None, max_length=500)
+    branch: str = Field(default="main", min_length=1, max_length=120)
+    labels: list[str] = Field(default_factory=list)
+
+
+class LangConnectQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2_000)
+    project_id: str | None = Field(default=None, min_length=1, max_length=120)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
 class BuildResponse(BaseModel):
     project_id: str
     status: AgentStatus

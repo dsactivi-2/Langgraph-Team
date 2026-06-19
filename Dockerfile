@@ -9,6 +9,8 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY agents ./agents
 COPY docs ./docs
+COPY js-adapters ./js-adapters
+COPY langgraph.json ./
 COPY prompts ./prompts
 COPY skills ./skills
 COPY templates ./templates

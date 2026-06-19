@@ -2,21 +2,30 @@ from __future__ import annotations
 
 from pathlib import Path
 from threading import Lock
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from .auth import clear_auth_cookie, require_auth, set_auth_cookie, verify_session
+from .deep_agents_adapter import deep_agents_code, deep_agents_js_code, open_swe_task_payload
 from .graph import run_build
+from .integrations import integration_matrix
+from .langconnect_adapter import LangConnectUnavailable, query_langconnect
 from .llm import LLMUnavailable, OpenAICompatibleLLM
+from .mcp_adapters import list_mcp_tools
 from .models import (
+    AgentProtocolRunCreate,
+    AgentProtocolThreadCreate,
     BuildRequest,
     BuildResponse,
     ChatMessageRequest,
+    LangConnectQueryRequest,
     LLMCompletionRequest,
     LoginRequest,
     MemorySearchRequest,
     MemoryUpsertRequest,
+    OpenSWETaskRequest,
 )
 from .settings import get_settings
 from .storage import HybridBuildArchive
@@ -112,9 +121,11 @@ def metadata(request: Request) -> dict[str, object]:
             "base_url": settings.llm_base_url or "OpenAI default",
             "configured": LLM.configured,
         },
+        "integrations": integration_matrix(),
         "secrets": {
             "openai_api_key_set": bool(settings.openai_api_key),
             "anthropic_api_key_set": bool(settings.anthropic_api_key),
+            "langsmith_api_key_set": bool(settings.langsmith_api_key),
             "where_to_set": ".env locally, VPS environment variables, or your secret manager",
         },
         "paths": {
@@ -235,6 +246,110 @@ def llm_complete(payload: LLMCompletionRequest, request: Request) -> dict[str, o
         return {"content": LLM.complete(payload.prompt, payload.system), "configured": True}
     except LLMUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/integrations")
+def integrations(request: Request) -> dict[str, object]:
+    require_auth(request)
+    return {"integrations": integration_matrix()}
+
+
+@app.get("/integrations/deep-agents/code")
+def deep_agents_python_code(request: Request) -> dict[str, str]:
+    require_auth(request)
+    return {"language": "python", "content": deep_agents_code()}
+
+
+@app.get("/integrations/deep-agents/js-code")
+def deep_agents_javascript_code(request: Request) -> dict[str, str]:
+    require_auth(request)
+    return {"language": "typescript", "content": deep_agents_js_code()}
+
+
+@app.post("/integrations/open-swe/task")
+def open_swe_task(payload: OpenSWETaskRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    return open_swe_task_payload(payload)
+
+
+@app.post("/integrations/langconnect/query")
+def langconnect_query(payload: LangConnectQueryRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    try:
+        return query_langconnect(payload)
+    except LangConnectUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/mcp/tools")
+async def mcp_tools(request: Request) -> dict[str, object]:
+    require_auth(request)
+    try:
+        return {"tools": await list_mcp_tools(), "configured": bool(settings.mcp_servers_json)}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/agent-protocol/info")
+def agent_protocol_info(request: Request) -> dict[str, object]:
+    require_auth(request)
+    return {
+        "name": settings.app_name,
+        "version": "0.1.0",
+        "enabled": settings.agent_protocol_enabled,
+        "capabilities": ["threads", "runs", "stateful-builds", "chat-history"],
+    }
+
+
+@app.post("/agent-protocol/threads")
+def agent_protocol_create_thread(
+    payload: AgentProtocolThreadCreate,
+    request: Request,
+) -> dict[str, object]:
+    require_auth(request)
+    thread_id = payload.thread_id or payload.project_id or f"thread-{uuid4().hex[:12]}"
+    for message in payload.messages:
+        ARCHIVE.add_chat_message(thread_id, message.role, message.content)
+        MEMORY.upsert(thread_id, message.content, {"kind": "agent_protocol_message", "role": message.role})
+    return {
+        "thread_id": thread_id,
+        "project_id": payload.project_id or thread_id,
+        "metadata": payload.metadata,
+        "messages": ARCHIVE.list_chat_messages(thread_id),
+    }
+
+
+@app.get("/agent-protocol/threads/{thread_id}")
+def agent_protocol_get_thread(thread_id: str, request: Request) -> dict[str, object]:
+    require_auth(request)
+    return {"thread_id": thread_id, "messages": ARCHIVE.list_chat_messages(thread_id)}
+
+
+@app.post("/agent-protocol/runs")
+def agent_protocol_create_run(
+    payload: AgentProtocolRunCreate,
+    request: Request,
+) -> dict[str, object]:
+    require_auth(request)
+    project_id = payload.project_id or payload.thread_id
+    ARCHIVE.add_chat_message(payload.thread_id, "user", payload.input)
+    response = _build_response(BuildRequest(user_request=payload.input, project_id=project_id))
+    _remember_build(response)
+    ARCHIVE.add_chat_message(
+        payload.thread_id,
+        "assistant",
+        f"Build {response.project_id} completed with score {response.quality_score}.",
+    )
+    return {
+        "run_id": f"run-{uuid4().hex[:12]}",
+        "thread_id": payload.thread_id,
+        "project_id": response.project_id,
+        "status": response.status,
+        "output": response.model_dump(mode="json"),
+        "metadata": payload.metadata,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -418,6 +533,7 @@ def index() -> str:
               <button class="active" data-tab="builder">Build Studio</button>
               <button data-tab="agents">Agenten</button>
               <button data-tab="memory">Memory & Archiv</button>
+              <button data-tab="integrations">Integrationen</button>
               <button data-tab="settings">Settings</button>
               <button data-tab="deployment">Deployment</button>
               <button data-tab="history">History</button>
@@ -542,6 +658,28 @@ def index() -> str:
                   <div class="pill">docs/reports/</div>
                   <div class="pill">generated_artifacts</div>
                   <div class="pill">project_id namespace</div>
+                </div>
+              </div>
+            </section>
+
+            <section id="integrations" class="screen">
+              <div class="panel">
+                <h2>Frameworks & Adapter</h2>
+                <p class="help">Status fuer LangChain, LangGraph, Deep Agents, MCP, Agent Protocol, Open SWE, LangSmith und JS-Starter. Werte kommen aus Backend-Konfiguration und vorhandenen Adapter-Dateien.</p>
+                <div id="integration-list" class="grid cols"></div>
+              </div>
+              <div class="grid cols">
+                <div class="panel">
+                  <h2>Agent Protocol</h2>
+                  <pre>POST /agent-protocol/threads
+POST /agent-protocol/runs
+GET /agent-protocol/threads/{thread_id}</pre>
+                </div>
+                <div class="panel">
+                  <h2>MCP & Open SWE</h2>
+                  <pre>GET /mcp/tools
+POST /integrations/open-swe/task
+GET /integrations/deep-agents/code</pre>
                 </div>
               </div>
             </section>
@@ -679,6 +817,7 @@ curl http://localhost:8000/health</pre>
               ['LLM configured', metadata.llm.configured ? 'yes' : 'no'],
               ['OpenAI API Key', metadata.secrets.openai_api_key_set ? 'set' : 'not set'],
               ['Anthropic API Key', metadata.secrets.anthropic_api_key_set ? 'set' : 'not set'],
+              ['LangSmith API Key', metadata.secrets.langsmith_api_key_set ? 'set' : 'not set'],
               ['Where to set keys', metadata.secrets.where_to_set],
             ];
             byId('settings-table').innerHTML = '<tr><th>Setting</th><th>Value</th></tr>' +
@@ -686,6 +825,21 @@ curl http://localhost:8000/health</pre>
             byId('memory-info').innerHTML = Object.entries(metadata.paths)
               .map(([key, value]) => `<div class="item"><strong>${escapeHtml(key)}</strong><span class="help">${escapeHtml(value)}</span></div>`)
               .join('');
+          }
+
+          function renderIntegrations(integrations) {
+            byId('integration-list').innerHTML = Object.entries(integrations).map(([name, value]) => {
+              const implemented = value.implemented ? 'implemented' : 'not implemented';
+              const configured = value.configured ?? value.installed ?? value.langgraph_json ?? value.url_configured ?? null;
+              const detail = configured === null ? '' : `<span class="pill">${configured ? 'ready' : 'needs config'}</span>`;
+              return `
+                <div class="item">
+                  <strong>${escapeHtml(name)}</strong>
+                  <span class="pill">${escapeHtml(implemented)}</span>${detail}
+                  <div class="help">${escapeHtml(JSON.stringify(value))}</div>
+                </div>
+              `;
+            }).join('');
           }
 
           function renderMarkdownList(targetId, items) {
@@ -818,6 +972,7 @@ curl http://localhost:8000/health</pre>
             await refreshHealth();
             state.metadata = await getJson('/metadata');
             renderSettings(state.metadata);
+            renderIntegrations(state.metadata.integrations);
             const agents = await getJson('/agents');
             renderMarkdownList('agent-list', agents.agents);
             const templates = await getJson('/templates');

@@ -114,3 +114,82 @@ def test_auth_status_endpoint():
 
     assert response.status_code == 200
     assert response.json()["auth_enabled"] is False
+
+
+def test_integrations_endpoint_reports_missing_points_as_implemented_adapters():
+    client = TestClient(app)
+
+    response = client.get("/integrations")
+
+    assert response.status_code == 200
+    integrations = response.json()["integrations"]
+    for name in [
+        "langchain",
+        "langchain_js",
+        "langgraph",
+        "langgraph_js",
+        "deep_agents",
+        "deep_agents_js",
+        "deep_agents_code",
+        "open_swe",
+        "mcp_adapters",
+        "agent_protocol",
+        "langconnect",
+    ]:
+        assert integrations[name]["implemented"] is True
+
+
+def test_agent_protocol_thread_and_run():
+    client = TestClient(app)
+
+    thread_response = client.post(
+        "/agent-protocol/threads",
+        json={"thread_id": "agent-protocol-test"},
+    )
+    assert thread_response.status_code == 200
+    assert thread_response.json()["thread_id"] == "agent-protocol-test"
+
+    run_response = client.post(
+        "/agent-protocol/runs",
+        json={
+            "thread_id": "agent-protocol-test",
+            "input": "Build through Agent Protocol",
+        },
+    )
+    assert run_response.status_code == 200
+    assert run_response.json()["project_id"] == "agent-protocol-test"
+
+
+def test_mcp_and_deep_agents_code_endpoints():
+    client = TestClient(app)
+
+    mcp_response = client.get("/mcp/tools")
+    assert mcp_response.status_code == 200
+    assert mcp_response.json()["tools"] == []
+
+    code_response = client.get("/integrations/deep-agents/code")
+    assert code_response.status_code == 200
+    assert "create_deep_agent" in code_response.json()["content"]
+
+
+def test_open_swe_task_payload_endpoint():
+    client = TestClient(app)
+
+    response = client.post(
+        "/integrations/open-swe/task",
+        json={"title": "Fix tests", "description": "Run tests and fix failures."},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["task"]["title"] == "Fix tests"
+
+
+def test_langconnect_endpoint_requires_configuration():
+    client = TestClient(app)
+
+    response = client.post(
+        "/integrations/langconnect/query",
+        json={"query": "deployment memory", "project_id": "test-memory"},
+    )
+
+    assert response.status_code == 503

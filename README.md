@@ -9,7 +9,10 @@ Dieses Repository enthaelt ein production-orientiertes MVP fuer ein LangGraph Bu
 Die Web-UI stellt ein Build Studio mit Bereichen fuer Agenten, Memory/Archiv,
 Settings/API-Key-Status, Deployment-Checkliste und Build-History bereit. Builds
 und Chat-History werden in Postgres persistiert, Qdrant liefert Memory-Suche,
-und ein OpenAI-kompatibler LLM-Adapter ist vorbereitet.
+und ein OpenAI-kompatibler LLM-Adapter ist vorbereitet. Zusaetzlich sind
+Adapter fuer LangChain, LangChain.js, LangGraph Server, LangGraph.js,
+Deep Agents, Deep Agents.js, MCP, Agent Protocol und Open-SWE-Handoffs
+enthalten.
 
 ## Ziele & Erfolgskriterien
 
@@ -21,8 +24,31 @@ und ein OpenAI-kompatibler LLM-Adapter ist vorbereitet.
 - [x] Qdrant Memory Search mit lokalem Fallback fuer Tests
 - [x] Optionaler Login/Auth-Schutz fuer UI/API
 - [x] OpenAI-kompatibler LLM-Adapter
+- [x] LangChain Runnable/Tool Adapter
+- [x] LangGraph Server Config via `langgraph.json`
+- [x] MCP Adapter ueber `langchain-mcp-adapters`
+- [x] Agent Protocol kompatible Thread-/Run-Endpunkte
+- [x] Deep Agents Python/JS Starter-Code
+- [x] Open SWE Task-Handoff Adapter
+- [x] LangChain.js/LangGraph.js Adapter-Paket unter `js-adapters/`
 - [x] Docker Compose mit App, Postgres und Qdrant
 - [x] Tests fuer Graph, API und Modelle
+
+## Integrationen
+
+| Integration | Status | Einstieg |
+| --- | --- | --- |
+| LangChain | Eingebaut | `src/langgraph_builder_team/langchain_adapter.py` |
+| LangChain.js | Eingebaut als Adapterpaket | `js-adapters/src/langchain.ts` |
+| LangGraph | Eingebaut | `src/langgraph_builder_team/graph.py` |
+| LangGraph Server | Eingebaut als Config | `langgraph.json` |
+| LangGraph.js | Eingebaut als Adapterpaket | `js-adapters/src/langgraph.ts` |
+| Deep Agents | Eingebaut als Starter/Runtime Adapter | `/integrations/deep-agents/code` |
+| Deep Agents.js | Eingebaut als Adapterpaket | `js-adapters/src/deep-agents.ts` |
+| Open SWE | Eingebaut als Task-Handoff | `/integrations/open-swe/task` |
+| MCP Adapters | Eingebaut | `/mcp/tools`, `MCP_SERVERS_JSON` |
+| Agent Protocol | Eingebaut | `/agent-protocol/*` |
+| LangSmith | Konfigurierbar | `LANGSMITH_API_KEY`, `LANGCHAIN_TRACING_V2` |
 
 ## Architektur
 
