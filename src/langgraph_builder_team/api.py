@@ -399,9 +399,9 @@ def index() -> str:
             color: var(--text);
           }
           button, input, textarea, select { font: inherit; }
-          .shell { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+          .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
           aside {
-            background: #111827;
+            background: #10151f;
             color: #f8fafc;
             padding: 24px 18px;
             position: sticky;
@@ -409,6 +409,19 @@ def index() -> str:
             height: 100vh;
           }
           .brand { font-size: 20px; font-weight: 750; margin-bottom: 6px; }
+          .version-badge {
+            display: inline-flex;
+            width: fit-content;
+            align-items: center;
+            border: 1px solid rgba(148, 163, 184, .35);
+            border-radius: 999px;
+            padding: 5px 9px;
+            margin-bottom: 12px;
+            color: #bfdbfe;
+            background: rgba(37, 99, 235, .16);
+            font-size: 12px;
+            font-weight: 700;
+          }
           .sub { color: #bac4d4; font-size: 13px; line-height: 1.5; margin-bottom: 22px; }
           .nav { display: grid; gap: 8px; }
           .nav button {
@@ -432,6 +445,31 @@ def index() -> str:
           h1 { font-size: 28px; margin: 0; letter-spacing: 0; }
           h2 { font-size: 18px; margin: 0 0 14px; }
           h3 { font-size: 15px; margin: 0 0 10px; }
+          .stack-banner {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(360px, .8fr);
+            gap: 16px;
+            margin-bottom: 22px;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 18px;
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 60%, #ecfdf5 100%);
+          }
+          .stack-banner strong { display: block; font-size: 18px; margin-bottom: 6px; }
+          .stack-banner p { margin: 0; color: var(--muted); line-height: 1.5; }
+          .domain-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .domain-tile {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            padding: 10px;
+          }
+          .domain-tile b { display: block; font-size: 12px; color: #0f172a; margin-bottom: 4px; }
+          .domain-tile span { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
           .status {
             display: inline-flex;
             align-items: center;
@@ -604,7 +642,7 @@ def index() -> str:
           @media (max-width: 980px) {
             .shell { grid-template-columns: 1fr; }
             aside { position: static; height: auto; }
-            .cols, .cards, .row, .chat-shell, .chat-toolbar, .chat-composer { grid-template-columns: 1fr; }
+            .cols, .cards, .row, .chat-shell, .chat-toolbar, .chat-composer, .stack-banner, .domain-grid { grid-template-columns: 1fr; }
             .message { max-width: 100%; }
             main { padding: 18px; }
             .topbar { align-items: flex-start; flex-direction: column; }
@@ -615,7 +653,8 @@ def index() -> str:
         <div class="shell">
           <aside>
             <div class="brand">LangGraph Builder Team</div>
-            <div class="sub">Planen, bauen, testen, reviewen und deployen von Agent-Projekten.</div>
+            <div class="version-badge">Official Stack Console v2</div>
+            <div class="sub">Getrennte LangChain-, LangGraph- und LangSmith-Architektur mit Builder UI, API und Agent Runtime.</div>
             <div class="nav">
               <button class="active" data-tab="agent-chat">Agent Chat</button>
               <button data-tab="builder">Build Studio</button>
@@ -631,10 +670,23 @@ def index() -> str:
           <main>
             <div class="topbar">
               <div>
-                <h1>Build Studio</h1>
-                <div class="help">Arbeitsoberflaeche fuer Builder-Requests, Optionen, Artefakte und Review-Ergebnisse.</div>
+                <h1>Official Stack Console</h1>
+                <div class="help">Builder UI, FastAPI, LangGraph Server und LangSmith Tracing sind jetzt als getrennte Produktbereiche vorbereitet.</div>
               </div>
               <div class="status"><span id="health-dot" class="dot"></span><span id="health-text">checking</span></div>
+            </div>
+
+            <div class="stack-banner">
+              <div>
+                <strong>Aktiver Stand: offizielle LangChain / LangGraph / LangSmith Trennung</strong>
+                <p>LangChain bleibt Code-Library fuer Tools und Runnables. LangGraph ist Graph Runtime und optional separater Server. LangSmith bleibt externe Observability/Evaluation. Diese App ist die Operator-Oberflaeche fuer Builds, Memory, History und Deployment.</p>
+              </div>
+              <div class="domain-grid">
+                <div class="domain-tile"><b>Builder UI</b><span>builder.&lt;domain&gt; / lokal :8000</span></div>
+                <div class="domain-tile"><b>Builder API</b><span>api.&lt;domain&gt; / FastAPI</span></div>
+                <div class="domain-tile"><b>LangGraph Server</b><span>graph.&lt;domain&gt; / langgraph.json</span></div>
+                <div class="domain-tile"><b>LangSmith</b><span>smith.langchain.com / extern</span></div>
+              </div>
             </div>
 
             <section id="agent-chat" class="screen active">
@@ -791,6 +843,16 @@ def index() -> str:
             </section>
 
             <section id="integrations" class="screen">
+              <div class="panel">
+                <h2>Produkt-Trennung & Routing</h2>
+                <p class="help">Diese Aufteilung folgt der vorgesehenen Produktrolle: LangChain im Code, LangGraph als Runtime/Server, LangSmith extern fuer Observability. Postgres und Qdrant bleiben interne Infrastruktur.</p>
+                <div class="domain-grid">
+                  <div class="domain-tile"><b>LangChain</b><span>Keine Subdomain: Python/JS Library im Code</span></div>
+                  <div class="domain-tile"><b>LangGraph</b><span>graph.&lt;domain&gt; -> langgraph-server:2024</span></div>
+                  <div class="domain-tile"><b>LangSmith</b><span>smith.langchain.com / LANGSMITH_ENDPOINT</span></div>
+                  <div class="domain-tile"><b>Builder Team</b><span>builder.&lt;domain&gt; und api.&lt;domain&gt;</span></div>
+                </div>
+              </div>
               <div class="panel">
                 <h2>Frameworks & Adapter</h2>
                 <p class="help">Status fuer LangChain, LangGraph, Deep Agents, MCP, Agent Protocol, Open SWE, LangSmith und JS-Starter. Werte kommen aus Backend-Konfiguration und vorhandenen Adapter-Dateien.</p>
