@@ -37,12 +37,21 @@ Die lokale UI/API laeuft standardmaessig auf Port `8000`.
 | `GLOBAL_MEMORY_COLLECTION` | Qdrant Collection fuer globales Wissen | Nein | `global_meta_knowledge` |
 | `OPENAI_API_KEY` | OpenAI API Key fuer spaetere LLM-Adapter | Optional | `sk-...` |
 | `ANTHROPIC_API_KEY` | Claude API Key fuer spaetere LLM-Adapter | Optional | `sk-ant-...` |
+| `POSTGRES_CHECKPOINTER_ENABLED` | LangGraph PostgresSaver aktivieren | Nein | `true` |
+| `LLM_PROVIDER` | LLM Adapter Typ | Nein | `openai-compatible` |
+| `LLM_BASE_URL` | OpenAI-kompatible Base URL | Optional | `https://api.openai.com/v1` |
+| `LLM_MODEL` | Chat Completion Modell | Nein | `gpt-4o-mini` |
+| `AUTH_ENABLED` | Login fuer UI/API aktivieren | Nein | `true` |
+| `AUTH_USERNAME` | Login-Benutzer | Wenn Auth aktiv | `admin` |
+| `AUTH_PASSWORD` | Login-Passwort | Wenn Auth aktiv | `change-me` |
+| `AUTH_SESSION_SECRET` | Cookie-Signatur-Secret | Wenn Auth aktiv | `long-random-secret` |
 
 Der aktuelle MVP laeuft deterministisch ohne LLM-Key. Sobald Live-LLM-Nodes
 aktiviert werden, muessen die passenden Provider-Secrets gesetzt werden.
 
 Fuer Production muessen mindestens `POSTGRES_PASSWORD` und `POSTGRES_DSN` auf
-starke, VPS-spezifische Werte geaendert werden.
+starke, VPS-spezifische Werte geaendert werden. Wenn die UI oeffentlich
+erreichbar ist, muss `AUTH_ENABLED=true` gesetzt werden.
 
 ## VPS Deployment per SSH
 
@@ -95,6 +104,10 @@ builder.example.com {
 ## Health Checks & Monitoring
 
 - Health Endpoint: `/health`
+- Auth Status: `/auth/status`
+- Memory Search: `/memory/search`
+- Chat History: `/chat/{project_id}`
+- LLM Test: `/llm/complete`
 - Lokale Logs: `docker compose logs -f`
 - App Logs: `docker compose logs -f app`
 - Postgres Status: `docker compose ps postgres`
@@ -119,9 +132,9 @@ oder volume-level Backups eingerichtet werden.
 
 ## Bekannte Limitationen
 
-- Postgres Checkpointer und Qdrant Vector Memory sind vorbereitet, aber noch
-  nicht als tiefe Runtime-Persistenz angebunden.
-- Live-LLM-Adapter sind noch nicht aktiviert.
+- Auth ist in `.env.example` fuer lokale Entwicklung standardmaessig deaktiviert.
+- Die LLM-Nodes nutzen den Adapter noch nicht automatisch in jedem Agenten;
+  `/llm/complete` stellt die Runtime-Integration bereit.
 - K3s-Manifeste sind ein Basis-Startpunkt und noch kein vollstaendiges
   Production-Cluster-Setup.
 - Echtes VPS-Deployment kann erst mit Host/IP und SSH-User ausgefuehrt werden.

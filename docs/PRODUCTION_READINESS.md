@@ -5,9 +5,13 @@
 Das Projekt ist als production-orientierter MVP startklar:
 
 - FastAPI-App mit `/health` und `POST /build`
-- Web-UI mit Build Studio, Agentenbereich, Memory/Archiv, Settings, Deployment
-  und prozesslokaler Build-History
+- Web-UI mit Build Studio, Agentenbereich, Memory/Archiv, Settings, Deployment,
+  LLM-Test und Build-History
 - LangGraph Workflow mit typisiertem `BuilderState`
+- LangGraph PostgresSaver als Checkpointer, wenn Postgres erreichbar ist
+- Persistente Build- und Chat-History in Postgres mit kontrolliertem Fallback
+- Qdrant Memory Search mit deterministischem lokalem Embedding und Fallback
+- OpenAI-kompatibler LLM-Adapter
 - Deterministische Agent-Nodes fuer reproduzierbare Tests ohne LLM-Key
 - Docker Compose Stack mit App, Postgres und Qdrant
 - Non-root App-Container, App-Healthcheck und `no-new-privileges`
@@ -29,22 +33,18 @@ Das Projekt ist als production-orientierter MVP startklar:
 - CI Workflow und Makefile fuer reproduzierbare Checks ergaenzt.
 - Operator-UI und Metadaten-Endpunkte fuer Agent Specs, Templates, Settings und
   Build-History ergaenzt.
+- Postgres-Archiv, Chat-History, Qdrant Memory Search, Auth-Endpunkte und
+  OpenAI-kompatibler LLM-Adapter ergaenzt.
 
 ## Empfohlene naechste Erweiterungen
 
-1. Postgres Checkpointer konkret an LangGraph anbinden.
-2. Qdrant Vector Memory mit Collection-Initialisierung und Integrationstests
-   aktivieren.
-3. Sandbox Executor fuer generierte Projekte mit isolierten Volumes, Timeouts
+1. Sandbox Executor fuer generierte Projekte mit isolierten Volumes, Timeouts
    und Resource-Limits implementieren.
-4. Live-LLM-Adapter pro Agent mit strukturierter Output-Validierung ergaenzen.
-5. Authentifizierung fuer die API/UI einfuehren, bevor die App oeffentlich
-   erreichbar betrieben wird.
-6. Build-History und Artefaktarchiv von Prozessspeicher auf Postgres/Object
-   Storage umstellen.
-7. K3s-Manifeste um Namespace, Secrets, Ingress, Ressourcenlimits und externe
+2. LLM-Adapter pro Agent in die Node-Strategien integrieren.
+3. Auth im VPS-Deployment verpflichtend setzen und optional OAuth ergaenzen.
+4. K3s-Manifeste um Namespace, Secrets, Ingress, Ressourcenlimits und externe
    Datenbanken erweitern.
-8. Observability ausbauen: strukturierte Logs, Request IDs, Metrics und optional
+5. Observability ausbauen: strukturierte Logs, Request IDs, Metrics und optional
    LangSmith Tracing.
 
 ## Deployment-Freigabe

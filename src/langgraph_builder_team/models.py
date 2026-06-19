@@ -101,6 +101,34 @@ class BuildRequest(BaseModel):
     project_id: str | None = Field(default=None, min_length=1, max_length=120)
 
 
+class ChatMessageRequest(BaseModel):
+    project_id: str = Field(..., min_length=1, max_length=120)
+    role: Literal["user", "assistant", "system"] = "user"
+    content: str = Field(..., min_length=1, max_length=20_000)
+
+
+class MemoryUpsertRequest(BaseModel):
+    project_id: str = Field(..., min_length=1, max_length=120)
+    text: str = Field(..., min_length=1, max_length=20_000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemorySearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2_000)
+    project_id: str | None = Field(default=None, min_length=1, max_length=120)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+class LLMCompletionRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=20_000)
+    system: str | None = Field(default=None, max_length=5_000)
+
+
 class BuildResponse(BaseModel):
     project_id: str
     status: AgentStatus

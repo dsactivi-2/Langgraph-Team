@@ -3,12 +3,24 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse
 
+from .auth import clear_auth_cookie, require_auth, set_auth_cookie, verify_session
 from .graph import run_build
-from .models import BuildRequest, BuildResponse
+from .llm import LLMUnavailable, OpenAICompatibleLLM
+from .models import (
+    BuildRequest,
+    BuildResponse,
+    ChatMessageRequest,
+    LLMCompletionRequest,
+    LoginRequest,
+    MemorySearchRequest,
+    MemoryUpsertRequest,
+)
 from .settings import get_settings
+from .storage import HybridBuildArchive
+from .vector_memory import HybridMemory
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
@@ -28,9 +40,11 @@ AGENTS_DIR = _project_path("agents")
 TEMPLATES_DIR = _project_path("templates")
 PROMPTS_DIR = _project_path("prompts")
 
-BUILD_HISTORY: list[BuildResponse] = []
 BUILD_HISTORY_LOCK = Lock()
 MAX_HISTORY_ITEMS = 25
+ARCHIVE = HybridBuildArchive(max_items=MAX_HISTORY_ITEMS)
+MEMORY = HybridMemory()
+LLM = OpenAICompatibleLLM()
 
 
 def _build_response(request: BuildRequest) -> BuildResponse:
@@ -49,8 +63,12 @@ def _build_response(request: BuildRequest) -> BuildResponse:
 
 def _remember_build(response: BuildResponse) -> None:
     with BUILD_HISTORY_LOCK:
-        BUILD_HISTORY.insert(0, response)
-        del BUILD_HISTORY[MAX_HISTORY_ITEMS:]
+        ARCHIVE.save_build(response)
+        MEMORY.upsert(
+            response.project_id,
+            f"Build {response.project_id}: status={response.status} score={response.quality_score}",
+            {"kind": "build_summary", "quality_score": response.quality_score},
+        )
 
 
 def _list_markdown(directory: Path) -> list[dict[str, str]]:
@@ -68,16 +86,31 @@ def health() -> dict[str, str]:
 
 
 @app.get("/metadata")
-def metadata() -> dict[str, object]:
+def metadata(request: Request) -> dict[str, object]:
+    require_auth(request)
     return {
         "app": settings.app_name,
         "environment": settings.app_env,
         "quality_threshold": settings.quality_threshold,
+        "auth": {
+            "enabled": settings.auth_enabled,
+            "authenticated": True,
+            "username": settings.auth_username if settings.auth_enabled else None,
+        },
         "memory": {
             "postgres_dsn_configured": bool(settings.postgres_dsn),
+            "postgres_checkpointer_enabled": settings.postgres_checkpointer_enabled,
+            "postgres_archive_available": ARCHIVE.last_error is None,
             "qdrant_url": settings.qdrant_url,
             "project_memory_collection": settings.project_memory_collection,
             "global_memory_collection": settings.global_memory_collection,
+            "qdrant_available": MEMORY.last_error is None,
+        },
+        "llm": {
+            "provider": settings.llm_provider,
+            "model": settings.llm_model,
+            "base_url": settings.llm_base_url or "OpenAI default",
+            "configured": LLM.configured,
         },
         "secrets": {
             "openai_api_key_set": bool(settings.openai_api_key),
@@ -96,33 +129,112 @@ def metadata() -> dict[str, object]:
 
 
 @app.get("/agents")
-def agents() -> dict[str, list[dict[str, str]]]:
+def agents(request: Request) -> dict[str, list[dict[str, str]]]:
+    require_auth(request)
     return {"agents": _list_markdown(AGENTS_DIR)}
 
 
 @app.get("/templates")
-def templates() -> dict[str, list[dict[str, str]]]:
+def templates(request: Request) -> dict[str, list[dict[str, str]]]:
+    require_auth(request)
     return {"templates": _list_markdown(TEMPLATES_DIR)}
 
 
 @app.get("/prompts")
-def prompts() -> dict[str, list[dict[str, str]]]:
+def prompts(request: Request) -> dict[str, list[dict[str, str]]]:
+    require_auth(request)
     return {"prompts": _list_markdown(PROMPTS_DIR)}
 
 
 @app.get("/builds", response_model=list[BuildResponse])
-def builds() -> list[BuildResponse]:
+def builds(request: Request) -> list[BuildResponse]:
+    require_auth(request)
     with BUILD_HISTORY_LOCK:
-        return list(BUILD_HISTORY)
+        return ARCHIVE.list_builds()
 
 
 @app.get("/builds/{project_id}", response_model=BuildResponse)
-def build_detail(project_id: str) -> BuildResponse:
+def build_detail(project_id: str, request: Request) -> BuildResponse:
+    require_auth(request)
     with BUILD_HISTORY_LOCK:
-        for item in BUILD_HISTORY:
-            if item.project_id == project_id:
-                return item
+        item = ARCHIVE.get_build(project_id)
+        if item:
+            return item
     raise HTTPException(status_code=404, detail="Build not found")
+
+
+@app.post("/auth/login")
+def login(payload: LoginRequest) -> JSONResponse:
+    if not settings.auth_enabled:
+        return JSONResponse({"authenticated": True, "auth_enabled": False})
+    if not settings.auth_password:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AUTH_PASSWORD is not configured",
+        )
+    if payload.username != settings.auth_username or payload.password != settings.auth_password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    response = JSONResponse({"authenticated": True, "auth_enabled": True})
+    set_auth_cookie(response, payload.username)
+    return response
+
+
+@app.get("/auth/status")
+def auth_status(request: Request) -> dict[str, object]:
+    return {
+        "auth_enabled": settings.auth_enabled,
+        "authenticated": verify_session(request.cookies.get(settings.auth_cookie_name)),
+    }
+
+
+@app.post("/auth/logout")
+def logout() -> JSONResponse:
+    response = JSONResponse({"authenticated": False})
+    clear_auth_cookie(response)
+    return response
+
+
+@app.get("/chat/{project_id}")
+def chat_history(project_id: str, request: Request) -> dict[str, object]:
+    require_auth(request)
+    return {"messages": ARCHIVE.list_chat_messages(project_id), "storage_error": ARCHIVE.last_error}
+
+
+@app.post("/chat")
+def add_chat_message(payload: ChatMessageRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    message = ARCHIVE.add_chat_message(payload.project_id, payload.role, payload.content)
+    MEMORY.upsert(
+        payload.project_id,
+        payload.content,
+        {"kind": "chat", "role": payload.role},
+    )
+    return {"message": message, "storage_error": ARCHIVE.last_error}
+
+
+@app.post("/memory/upsert")
+def memory_upsert(payload: MemoryUpsertRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    point_id = MEMORY.upsert(payload.project_id, payload.text, payload.metadata)
+    return {"id": point_id, "qdrant_error": MEMORY.last_error}
+
+
+@app.post("/memory/search")
+def memory_search(payload: MemorySearchRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    return {
+        "results": MEMORY.search(payload.query, payload.project_id, payload.limit),
+        "qdrant_error": MEMORY.last_error,
+    }
+
+
+@app.post("/llm/complete")
+def llm_complete(payload: LLMCompletionRequest, request: Request) -> dict[str, object]:
+    require_auth(request)
+    try:
+        return {"content": LLM.complete(payload.prompt, payload.system), "configured": True}
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -396,10 +508,37 @@ def index() -> str:
                   <h2>Memory & Chat History</h2>
                   <p class="help">Kurzfristiger Runtime-State lebt im `BuilderState`. Production-Checkpoints sollen in Postgres liegen. Projekt- und globale Wissenssuche sind fuer Qdrant vorbereitet.</p>
                   <div id="memory-info" class="list"></div>
+                  <div style="height: 14px"></div>
+                  <div class="field">
+                    <label for="chat-project">Chat Project ID</label>
+                    <input id="chat-project" placeholder="z.B. langgraph-builder-production" />
+                  </div>
+                  <div class="field">
+                    <label for="chat-content">Chat / Plan Notiz</label>
+                    <textarea id="chat-content" style="min-height: 110px" placeholder="Notiz oder Chat-Nachricht speichern"></textarea>
+                  </div>
+                  <div class="actions">
+                    <button id="save-chat" class="btn">Chat speichern</button>
+                    <button id="load-chat" class="btn ghost">History laden</button>
+                  </div>
+                  <div style="height: 12px"></div>
+                  <div id="chat-list" class="list"></div>
                 </div>
                 <div class="panel">
+                  <h2>Qdrant Memory Search</h2>
+                  <p class="help">Builds und Chat-Nachrichten werden in Qdrant indexiert, wenn Qdrant erreichbar ist. Ohne Qdrant nutzt die App einen lokalen Fallback fuer Tests.</p>
+                  <div class="field">
+                    <label for="memory-query">Suchanfrage</label>
+                    <input id="memory-query" placeholder="z.B. sandbox tester deployment" />
+                  </div>
+                  <div class="actions">
+                    <button id="search-memory" class="btn">Memory suchen</button>
+                  </div>
+                  <div style="height: 12px"></div>
+                  <div id="memory-results" class="list"></div>
+                  <div style="height: 16px"></div>
                   <h2>Archiv</h2>
-                  <p class="help">Aktuell wird Build-History im Prozessspeicher gehalten. Fuer Production: Artefakte in Postgres/Object Storage archivieren, nach `project_id` versionieren und Reports in `docs/reports/` exportieren.</p>
+                  <p class="help">Builds und Chat-History werden in Postgres persistiert, wenn die DB erreichbar ist. Artefakte bleiben zusaetzlich im Build-Payload versioniert.</p>
                   <div class="pill">docs/reports/</div>
                   <div class="pill">generated_artifacts</div>
                   <div class="pill">project_id namespace</div>
@@ -416,6 +555,19 @@ def index() -> str:
               <div class="panel">
                 <h2>Templates</h2>
                 <div id="template-list" class="list"></div>
+              </div>
+              <div class="panel">
+                <h2>LLM Adapter Test</h2>
+                <p class="help">OpenAI-kompatibler Adapter. Setze `OPENAI_API_KEY`, optional `LLM_BASE_URL` und `LLM_MODEL` in `.env` oder auf dem VPS.</p>
+                <div class="field">
+                  <label for="llm-prompt">Prompt</label>
+                  <textarea id="llm-prompt" style="min-height: 120px">Antworte mit einem kurzen Systemstatus.</textarea>
+                </div>
+                <div class="actions">
+                  <button id="run-llm" class="btn secondary">LLM testen</button>
+                </div>
+                <div style="height: 12px"></div>
+                <pre id="llm-output">Kein LLM-Test ausgefuehrt.</pre>
               </div>
             </section>
 
@@ -455,6 +607,12 @@ curl http://localhost:8000/health</pre>
         <script>
           const state = { latest: null, metadata: null };
           const byId = (id) => document.getElementById(id);
+          const escapeHtml = (value) => String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
 
           document.querySelectorAll('.nav button').forEach((button) => {
             button.addEventListener('click', () => {
@@ -468,10 +626,28 @@ curl http://localhost:8000/health</pre>
           async function getJson(url, options) {
             const response = await fetch(url, options);
             if (!response.ok) {
+              if (response.status === 401) {
+                await loginFlow();
+                return getJson(url, options);
+              }
               const text = await response.text();
               throw new Error(`${response.status} ${text}`);
             }
             return response.json();
+          }
+
+          async function loginFlow() {
+            const status = await fetch('/auth/status').then((response) => response.json());
+            if (!status.auth_enabled || status.authenticated) return;
+            const username = window.prompt('Username');
+            const password = window.prompt('Password');
+            if (!username || !password) throw new Error('Login required');
+            const response = await fetch('/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+            if (!response.ok) throw new Error('Login failed');
           }
 
           async function refreshHealth() {
@@ -489,26 +665,34 @@ curl http://localhost:8000/health</pre>
             const rows = [
               ['Environment', metadata.environment],
               ['Quality Threshold', metadata.quality_threshold],
+              ['Auth enabled', metadata.auth.enabled ? 'yes' : 'no'],
               ['Postgres DSN configured', metadata.memory.postgres_dsn_configured ? 'yes' : 'no'],
+              ['Postgres Checkpointer', metadata.memory.postgres_checkpointer_enabled ? 'enabled' : 'disabled'],
+              ['Postgres Archive', metadata.memory.postgres_archive_available ? 'available' : 'fallback'],
               ['Qdrant URL', metadata.memory.qdrant_url],
+              ['Qdrant Memory', metadata.memory.qdrant_available ? 'available' : 'fallback'],
               ['Project Memory Collection', metadata.memory.project_memory_collection],
               ['Global Memory Collection', metadata.memory.global_memory_collection],
+              ['LLM Provider', metadata.llm.provider],
+              ['LLM Model', metadata.llm.model],
+              ['LLM Base URL', metadata.llm.base_url],
+              ['LLM configured', metadata.llm.configured ? 'yes' : 'no'],
               ['OpenAI API Key', metadata.secrets.openai_api_key_set ? 'set' : 'not set'],
               ['Anthropic API Key', metadata.secrets.anthropic_api_key_set ? 'set' : 'not set'],
               ['Where to set keys', metadata.secrets.where_to_set],
             ];
             byId('settings-table').innerHTML = '<tr><th>Setting</th><th>Value</th></tr>' +
-              rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+              rows.map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join('');
             byId('memory-info').innerHTML = Object.entries(metadata.paths)
-              .map(([key, value]) => `<div class="item"><strong>${key}</strong><span class="help">${value}</span></div>`)
+              .map(([key, value]) => `<div class="item"><strong>${escapeHtml(key)}</strong><span class="help">${escapeHtml(value)}</span></div>`)
               .join('');
           }
 
           function renderMarkdownList(targetId, items) {
             byId(targetId).innerHTML = items.map((item) => `
               <div class="item">
-                <strong>${item.filename}</strong>
-                <div class="help">${item.content.split('\\n').slice(0, 3).join(' ')}</div>
+                <strong>${escapeHtml(item.filename)}</strong>
+                <div class="help">${escapeHtml(item.content.split('\\n').slice(0, 3).join(' '))}</div>
               </div>
             `).join('');
           }
@@ -518,14 +702,14 @@ curl http://localhost:8000/health</pre>
             byId('metric-score').textContent = `${result.quality_score}/100`;
             byId('metric-status').textContent = result.status;
             byId('metric-artifacts').textContent = result.artifacts.length;
-            byId('summary').innerHTML = `<span class="pill">${result.project_id}</span><span class="pill">${result.status}</span><span class="pill">score ${result.quality_score}</span>`;
+            byId('summary').innerHTML = `<span class="pill">${escapeHtml(result.project_id)}</span><span class="pill">${escapeHtml(result.status)}</span><span class="pill">score ${escapeHtml(result.quality_score)}</span>`;
             byId('output').textContent = JSON.stringify(result, null, 2);
             byId('plan-output').textContent = result.plan || 'Kein Plan vorhanden.';
             byId('artifacts').innerHTML = result.artifacts.map((artifact, index) => `
               <div class="item artifact" data-index="${index}">
-                <strong>${artifact.filename}</strong>
-                <span class="pill">${artifact.artifact_type}</span>
-                <div class="help">${artifact.description || ''}</div>
+                <strong>${escapeHtml(artifact.filename)}</strong>
+                <span class="pill">${escapeHtml(artifact.artifact_type)}</span>
+                <div class="help">${escapeHtml(artifact.description || '')}</div>
               </div>
             `).join('');
             document.querySelectorAll('.artifact').forEach((item) => {
@@ -563,11 +747,71 @@ curl http://localhost:8000/health</pre>
             byId('metric-builds').textContent = builds.length;
             byId('history-list').innerHTML = builds.length ? builds.map((item) => `
               <div class="item">
-                <strong>${item.project_id}</strong>
-                <span class="pill">${item.status}</span><span class="pill">${item.quality_score}/100</span>
-                <div class="help">${item.artifacts.length} artifacts</div>
+                <strong>${escapeHtml(item.project_id)}</strong>
+                <span class="pill">${escapeHtml(item.status)}</span><span class="pill">${escapeHtml(item.quality_score)}/100</span>
+                <div class="help">${escapeHtml(item.artifacts.length)} artifacts</div>
               </div>
             `).join('') : '<div class="item">Noch keine Builds.</div>';
+          }
+
+          function currentProjectId() {
+            return byId('chat-project').value.trim()
+              || byId('project-id').value.trim()
+              || (state.latest && state.latest.project_id)
+              || 'default';
+          }
+
+          async function saveChat() {
+            const content = byId('chat-content').value.trim();
+            if (!content) return;
+            const response = await getJson('/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ project_id: currentProjectId(), role: 'user', content })
+            });
+            byId('chat-content').value = '';
+            await loadChat();
+            byId('output').textContent = JSON.stringify(response, null, 2);
+          }
+
+          async function loadChat() {
+            const data = await getJson(`/chat/${encodeURIComponent(currentProjectId())}`);
+            byId('chat-list').innerHTML = data.messages.length ? data.messages.map((item) => `
+              <div class="item">
+                <strong>${escapeHtml(item.role)}</strong>
+                <div class="help">${escapeHtml(item.content)}</div>
+              </div>
+            `).join('') : '<div class="item">Keine Chat-History fuer dieses Projekt.</div>';
+          }
+
+          async function searchMemory() {
+            const query = byId('memory-query').value.trim();
+            if (!query) return;
+            const data = await getJson('/memory/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ project_id: currentProjectId(), query, limit: 5 })
+            });
+            byId('memory-results').innerHTML = data.results.length ? data.results.map((item) => `
+              <div class="item">
+                <strong>score ${Number(item.score).toFixed(3)}</strong>
+                <div class="help">${escapeHtml(item.payload.text || JSON.stringify(item.payload))}</div>
+              </div>
+            `).join('') : '<div class="item">Keine Treffer.</div>';
+          }
+
+          async function runLlm() {
+            byId('llm-output').textContent = 'LLM laeuft...';
+            try {
+              const data = await getJson('/llm/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: byId('llm-prompt').value })
+              });
+              byId('llm-output').textContent = data.content;
+            } catch (error) {
+              byId('llm-output').textContent = error.message;
+            }
           }
 
           async function boot() {
@@ -582,6 +826,10 @@ curl http://localhost:8000/health</pre>
           }
 
           byId('run-build').addEventListener('click', runBuild);
+          byId('save-chat').addEventListener('click', saveChat);
+          byId('load-chat').addEventListener('click', loadChat);
+          byId('search-memory').addEventListener('click', searchMemory);
+          byId('run-llm').addEventListener('click', runLlm);
           byId('load-example').addEventListener('click', () => {
             byId('project-id').value = 'langgraph-builder-production';
             byId('target').value = 'vps';
@@ -602,7 +850,8 @@ curl http://localhost:8000/health</pre>
 
 
 @app.post("/build", response_model=BuildResponse)
-def build(request: BuildRequest) -> BuildResponse:
-    response = _build_response(request)
+def build(request_payload: BuildRequest, request: Request) -> BuildResponse:
+    require_auth(request)
+    response = _build_response(request_payload)
     _remember_build(response)
     return response

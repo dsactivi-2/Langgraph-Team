@@ -7,7 +7,9 @@
 Dieses Repository enthaelt ein production-orientiertes MVP fuer ein LangGraph Builder Team. Der Workflow plant ein Projekt, erzeugt erste Code-Artefakte, beschreibt Memory und Skills, fuehrt deterministische Sandbox-Checks aus, reviewed das Ergebnis, vergibt einen Quality Score und erzeugt Deployment-Hinweise.
 
 Die Web-UI stellt ein Build Studio mit Bereichen fuer Agenten, Memory/Archiv,
-Settings/API-Key-Status, Deployment-Checkliste und Build-History bereit.
+Settings/API-Key-Status, Deployment-Checkliste und Build-History bereit. Builds
+und Chat-History werden in Postgres persistiert, Qdrant liefert Memory-Suche,
+und ein OpenAI-kompatibler LLM-Adapter ist vorbereitet.
 
 ## Ziele & Erfolgskriterien
 
@@ -15,6 +17,10 @@ Settings/API-Key-Status, Deployment-Checkliste und Build-History bereit.
 - [x] LangGraph Workflow mit Planner, Builder, Memory Designer, Executor, Reviewer, Verifier und Deployment Specialist
 - [x] FastAPI UI/API
 - [x] Operator-UI fuer Build-Planung, Agenten, Memory, Settings, History und Deployment
+- [x] Persistente Build-/Chat-History ueber Postgres mit Fallback
+- [x] Qdrant Memory Search mit lokalem Fallback fuer Tests
+- [x] Optionaler Login/Auth-Schutz fuer UI/API
+- [x] OpenAI-kompatibler LLM-Adapter
 - [x] Docker Compose mit App, Postgres und Qdrant
 - [x] Tests fuer Graph, API und Modelle
 
@@ -46,6 +52,16 @@ Danach:
 
 API Keys werden nicht im Browser gesetzt oder angezeigt. Lokal gehoeren sie in
 `.env`, auf dem VPS in Environment Variables oder einen Secret Manager.
+
+Wichtige Production-Settings:
+
+- `AUTH_ENABLED=true`
+- `AUTH_USERNAME=admin`
+- `AUTH_PASSWORD=<strong-password>`
+- `AUTH_SESSION_SECRET=<long-random-secret>`
+- `OPENAI_API_KEY=<provider-key>`
+- `LLM_BASE_URL=<optional-openai-compatible-url>`
+- `LLM_MODEL=<model-name>`
 
 ## Lokal Entwickeln
 
